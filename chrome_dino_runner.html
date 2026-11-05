@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Geen internet - Chrome Dino Runner</title>
+    <!-- Tailwind CSS voor de Chrome pagina-opmaak en knoppen -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter voor de Chrome UI & Press Start 2P voor retro pixel-scores -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #f7f7f7;
+            --text-color: #535353;
+            --subtext-color: #757575;
+            --card-bg: #ffffff;
+            --border-color: #dadce0;
+        }
+
+        body.night-mode {
+            --bg-color: #202124;
+            --text-color: #e8eaed;
+            --subtext-color: #9aa0a6;
+            --card-bg: #292a2d;
+            --border-color: #3c4043;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.6s ease, color 0.6s ease;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow-x: hidden;
+        }
+
+        .pixel-font {
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        .chrome-card {
+            background-color: var(--card-bg);
+            border-color: var(--border-color);
+            transition: background-color 0.6s ease, border-color 0.6s ease;
+        }
+
+        /* Zorg dat het canvas haarscherpe pixels tekent */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            touch-action: none;
+        }
+
+        kbd {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 sm:p-8">
+
+    <!-- Bovenste balk met bediening en geluidsinstellingen -->
+    <header class="w-full max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-neutral-300 dark:border-neutral-700/50">
+        <div class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-3 h-3 rounded-full bg-red-500 animate-pulse" title="Offline simulatie"></span>
+            <span class="text-xs font-semibold uppercase tracking-wider opacity-75">Chrome Offline Arcade</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Geluid Aan/Uit -->
+            <button id="sound-toggle-btn" type="button" class="chrome-card border px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 hover:opacity-80 active:scale-95 transition shadow-sm">
+                <span id="sound-icon">🔊</span>
+                <span id="sound-label">Geluid: Aan</span>
+            </button>
+
+            <!-- Handmatige Nachtmodus Toggle -->
+            <button id="theme-toggle-btn" type="button" class="chrome-card border px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 hover:opacity-80 active:scale-95 transition shadow-sm" title="Wisselt ook automatisch elke 700 punten!">
+                <span id="theme-icon">🌙</span>
+                <span>Dag / Nacht</span>
+            </button>
+
+            <!-- Herstart Knop -->
+            <button id="restart-top-btn" type="button" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition shadow-sm">
+                <span>↻</span>
+                <span>Reset</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hoofdcontainer in authentieke Chrome 'Geen internet' stijl -->
+    <main class="w-full max-w-3xl mx-auto my-auto py-4">
+        
+        <!-- Het Speelveld (Canvas) -->
+        <div class="relative w-full overflow-hidden rounded-xl chrome-card border shadow-sm p-2 sm:p-4 mb-6">
+            <canvas id="dino-canvas" class="w-full h-[200px] sm:h-[240px] block cursor-pointer"></canvas>
+
+            <!-- Start-hint overlay (verdwijnt zodra je springt) -->
+            <div id="start-prompt" class="pointer-events-none absolute top-3 left-4 flex items-center gap-2 text-xs opacity-70 transition-opacity duration-300">
+                <span class="inline-block animate-bounce">🦖</span>
+                <span>Druk op <kbd>Spatie</kbd> of <kbd>↑</kbd> (of tik op het scherm) om te starten</span>
+            </div>
+        </div>
+
+        <!-- Mobiele / Touch Knoppen (Zichtbaar op kleinere schermen of voor muisgebruik) -->
+        <div class="grid grid-cols-2 gap-3 mb-8 sm:hidden">
+            <button id="touch-jump-btn" type="button" class="chrome-card border py-4 rounded-xl font-bold text-sm shadow-sm active:bg-blue-600 active:text-white transition flex flex-col items-center justify-center gap-1">
+                <span class="text-lg">⬆️</span>
+                <span>SPRING</span>
+            </button>
+            <button id="touch-duck-btn" type="button" class="chrome-card border py-4 rounded-xl font-bold text-sm shadow-sm active:bg-blue-600 active:text-white transition flex flex-col items-center justify-center gap-1">
+                <span class="text-lg">⬇️</span>
+                <span>BUIG (Ingedrukt)</span>
+            </button>
+        </div>
+
+        <!-- Authentieke Chrome "Geen internet" Tekst & Besturing Uitleg -->
+        <div class="px-1 sm:px-2 space-y-4">
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">Geen internet</h1>
+            
+            <div class="text-sm space-y-2 opacity-85">
+                <p>Probeer het volgende:</p>
+                <ul class="list-disc list-inside space-y-1 pl-2">
+                    <li>Spring over cactussen met <kbd>Spatie</kbd>, <kbd>↑</kbd>, <kbd>W</kbd> of door te klikken.</li>
+                    <li>Buk voor laagvliegende pterodactylussen met <kbd>↓</kbd> of <kbd>S</kbd>.</li>
+                    <li>Druk in de lucht op <kbd>↓</kbd> om sneller te landen.</li>
+                    <li>Elke <strong>700 punten</strong> wisselt het spel tussen dag en nacht.</li>
+                </ul>
+            </div>
+
+            <div class="pt-2 flex flex-wrap items-center justify-between gap-4 text-xs opacity-60 font-mono">
+                <span>ERR_INTERNET_DISCONNECTED</span>
+                <span id="speed-indicator">SNELHEID: 1.0x</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Voettekst -->
+    <footer class="w-full max-w-3xl mx-auto text-center text-xs opacity-50 pt-4">
+        100% HTML5 Canvas Pixel-Art • Geen externe afbeeldingen of geluiden nodig
+    </footer>
+
+    <!-- Volledige Game Engine & Pixel Art Renderer -->
+    <script>
+        /**
+         * ============================================================================
+         * 1. GELUIDSEFFECTEN (Web Audio API - authentieke 8-bit Chrome Dino geluiden)
+         * ============================================================================
+         */
+        class SoundEngine {
+            constructor() {
+                this.enabled = true;
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playJump() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(520, now);
+                    osc.frequency.setValueAtTime(680, now + 0.04);
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.11);
+                } catch (e) {}
+            }
+
+            playMilestone() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    // Klassieke dubbele toon bij elke 100 punten
+                    osc.frequency.setValueAtTime(587.33, now);       // D5
+                    osc.frequency.setValueAtTime(880.00, now + 0.08); // A5
+                    gain.gain.setValueAtTime(0.09, now);
+                    gain.gain.setValueAtTime(0.09, now + 0.22);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.28);
+                } catch (e) {}
+            }
+
+            playGameOver() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(190, now);
+                    osc.frequency.setValueAtTime(135, now + 0.07);
+                    osc.frequency.linearRampToValueAtTime(75, now + 0.22);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.24);
+                } catch (e) {}
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        /**
+         * ============================================================================
+         * 2. PIXEL ART SPRITE MATRICES (1 = voorgrondkleur, 0 = oog/uitsnede)
+         * ============================================================================
+         */
+        const SPRITES = {
+            // Staande / Rennende T-Rex (20 breed x 22 hoog)
+            DINO_HEAD_NORMAL: [
+                "          11111111  ",
+                "         1111111111 ",
+                "         1101111111 ",
+                "         1111111111 ",
+                "         1111111111 ",
+                "         1111100000 ",
+                "         1111111100 "
+            ],
+            DINO_HEAD_BLINK: [
+                "          11111111  ",
+                "         1111111111 ",
+                "         1111111111 ",
+                "         1111111111 ",
+                "         1111111111 ",
+                "         1111100000 ",
+                "         1111111100 "
+            ],
+            DINO_HEAD_CRASH: [
+                "          11111111  ",
+                "         1100011111 ",
+                "         1101011111 ",
+                "         1100011111 ",
+                "         1111111111 ",
+                "         1111111110 ",
+                "         1111100000 "
+            ],
+            DINO_BODY: [
+                "1       111111      ",
+                "1      111111111    ",
+                "11    11111111 1    ",
+                "11   111111111      ",
+                "111 1111111111      ",
+                " 1111111111111      ",
+                "  11111111111       ",
+                "   111111111        ",
+                "    1111111         "
+            ],
+            DINO_LEGS_IDLE: [
+                "    111 11          ",
+                "    11   1          ",
+                "    1    1          ",
+                "    11   11         "
+            ],
+            DINO_LEGS_RUN1: [
+                "    111 11          ",
+                "    11   11         ",
+                "    1               ",
+                "    11              "
+            ],
+            DINO_LEGS_RUN2: [
+                "    111 11          ",
+                "     11  1          ",
+                "         1          ",
+                "         11         "
+            ],
+
+            // Bukkende T-Rex (26 breed x 14 hoog)
+            DINO_DUCK_1: [
+                "                11111111  ",
+                "               1111111111 ",
+                "1              1101111111 ",
+                "11     111111111111111111 ",
+                "111  11111111111111111111 ",
+                " 111111111111111111110000 ",
+                "  11111111111111111111100 ",
+                "    111111111111111       ",
+                "      1111111 1 1         ",
+                "      111     1           ",
+                "      11                  ",
+                "      111                 "
+            ],
+            DINO_DUCK_2: [
+                "                11111111  ",
+                "               1111111111 ",
+                "1              1101111111 ",
+                "11     111111111111111111 ",
+                "111  11111111111111111111 ",
+                " 111111111111111111110000 ",
+                "  11111111111111111111100 ",
+                "    111111111111111       ",
+                "      1111111 1 1         ",
+                "       11    1            ",
+                "        1                 ",
+                "        11                "
+            ],
+
+            // Kleine Cactus (9 breed x 18 hoog)
+            CACTUS_SMALL: [
+                "    11   ",
+                "    11   ",
+                "    11   ",
+                "1   11   ",
+                "11  11  1",
+                "11  11 11",
+                "11  11 11",
+                "111111 11",
+                " 11111 11",
+                "    11111",
+                "    1111 ",
+                "    11   ",
+                "    11   ",
+                "    11   ",
+                "    11   ",
+                "    11   ",
+                "    11   ",
+                "    11   "
+            ],
+
+            // Grote Cactus (12 breed x 24 hoog)
+            CACTUS_LARGE: [
+                "     11     ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                " 1  1111    ",
+                "11  1111  1 ",
+                "11  1111 11 ",
+                "11  1111 11 ",
+                "11  1111 11 ",
+                "11  1111 11 ",
+                "11111111 11 ",
+                " 1111111 11 ",
+                "  111111111 ",
+                "    111111  ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    ",
+                "    1111    "
+            ],
+
+            // Pterodactylus Vleugels Omlaag (21 breed x 16 hoog)
+            PTERO_1: [
+                "      11             ",
+                "     111             ",
+                "    1101             ",
+                "   11111             ",
+                " 1111111111          ",
+                "111111111111111      ",
+                "     1111111111111111",
+                "       111111111111  ",
+                "        11111111     ",
+                "        111111       ",
+                "        11111        ",
+                "        1111         ",
+                "        111          ",
+                "        11           ",
+                "        1            ",
+                "                     "
+            ],
+
+            // Pterodactylus Vleugels Omhoog (21 breed x 16 hoog)
+            PTERO_2: [
+                "         1           ",
+                "         11          ",
+                "      11 111         ",
+                "     111 1111        ",
+                "    1101 11111       ",
+                "   11111 111111      ",
+                " 111111111111111     ",
+                "111111111111111111111",
+                "     11111111111111  ",
+                "       11111111      ",
+                "                     ",
+                "                     ",
+                "                     ",
+                "                     ",
+                "                     ",
+                "                     "
+            ],
+
+            // Wolk (24 breed x 8 hoog)
+            CLOUD: [
+                "        111111          ",
+                "     111      111       ",
+                "   11            1111   ",
+                "  1                  1  ",
+                " 1                    1 ",
+                "1                      1",
+                "111111111111111111111111"
+            ],
+
+            // Herstart Icoon (14 breed x 14 hoog)
+            RESTART: [
+                "    111111    ",
+                "  1111111111  ",
+                " 111      111 ",
+                " 11        111",
+                "11       11111",
+                "11        111 ",
+                "11         1  ",
+                "11            ",
+                "11         11 ",
+                " 11        11 ",
+                " 111      111 ",
+                "  1111111111  ",
+                "    111111    "
+            ]
+        };
+
+        // Helper om de T-Rex delen samen te voegen tot 1 matrix
+        function buildDinoMatrix(head, legs) {
+            return [...head, ...SPRITES.DINO_BODY, ...legs];
+        }
+
+        const DINO_FRAMES = {
+            idle: buildDinoMatrix(SPRITES.DINO_HEAD_NORMAL, SPRITES.DINO_LEGS_IDLE),
+            blink: buildDinoMatrix(SPRITES.DINO_HEAD_BLINK, SPRITES.DINO_LEGS_IDLE),
+            run1: buildDinoMatrix(SPRITES.DINO_HEAD_NORMAL, SPRITES.DINO_LEGS_RUN1),
+            run2: buildDinoMatrix(SPRITES.DINO_HEAD_NORMAL, SPRITES.DINO_LEGS_RUN2),
+            crash: buildDinoMatrix(SPRITES.DINO_HEAD_CRASH, SPRITES.DINO_LEGS_IDLE),
+            duck1: SPRITES.DINO_DUCK_1,
+            duck2: SPRITES.DINO_DUCK_2
+        };
+
+        /**
+         * Tekent een pixel-matrix op het canvas met een bepaalde schaal (standaard 2px per blokje)
+         */
+        function drawMatrix(ctx, matrix, startX, startY, scale, color) {
+            ctx.fillStyle = color;
+            const x0 = Math.round(startX);
+            const y0 = Math.round(startY);
+            for (let r = 0; r < matrix.length; r++) {
+                const row = matrix[r];
+                for (let c = 0; c < row.length; c++) {
+                    if (row[c] === '1') {
+                        ctx.fillRect(x0 + c * scale, y0 + r * scale, scale, scale);
+                    }
+                }
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 3. GAME CONSTANTEN & STATUS
+         * ============================================================================
+         */
+        const canvas = document.getElementById('dino-canvas');
+        const ctx = canvas.getContext('2d');
+        const startPrompt = document.getElementById('start-prompt');
+        const speedIndicator = document.getElementById('speed-indicator');
+
+        // Interne logische resolutie (zoals de echte Chrome Dino game)
+        const LOGICAL_WIDTH = 720;
+        const LOGICAL_HEIGHT = 210;
+        const GROUND_Y = 178;
+        const PIXEL_SCALE = 2;
+
+        // Spelstatus
+        let gameState = 'IDLE'; // 'IDLE', 'PLAYING', 'GAMEOVER'
+        let score = 0;
+        let highScore = 0;
+        let gameSpeed = 6.2;
+        const INITIAL_SPEED = 6.2;
+        const MAX_SPEED = 14.5;
+        const SPEED_ACCELERATION = 0.0012;
+
+        // Milestone knipper-animatie (elke 100 punten)
+        let milestoneFlashTimer = 0;
+        let milestoneSavedValue = 0;
+        let lastMilestoneReached = 0;
+
+        // Dag/Nacht Modus
+        let isNightMode = false;
+        let manualNightOverride = false;
+        let nightAlpha = 0; // Voor vloeiende overgang van sterren/maan
+
+        // T-Rex Speler Object
+        const dino = {
+            x: 42,
+            y: GROUND_Y - 20 * PIXEL_SCALE,
+            vy: 0,
+            width: 20 * PIXEL_SCALE,
+            height: 20 * PIXEL_SCALE,
+            isJumping: false,
+            isDucking: false,
+            fastDrop: false,
+            animTimer: 0,
+            legFrame: 0,
+            blinkTimer: 0,
+            isBlinking: false,
+
+            get groundTopY() {
+                const h = this.isDucking ? 12 * PIXEL_SCALE : 20 * PIXEL_SCALE;
+                return GROUND_Y - h;
+            },
+
+            reset() {
+                this.isJumping = false;
+                this.isDucking = false;
+                this.fastDrop = false;
+                this.vy = 0;
+                this.width = 20 * PIXEL_SCALE;
+                this.height = 20 * PIXEL_SCALE;
+                this.y = GROUND_Y - this.height;
+                this.animTimer = 0;
+            }
+        };
+
+        // Omgeving & Obstakels
+        let obstacles = [];
+        let clouds = [];
+        let stars = [];
+        let groundBumps = [];
+        let groundOffset = 0;
+        let nextObstacleDist = 280;
+
+        // Laad High Score uit localStorage
+        try {
+            const savedHi = localStorage.getItem('chrome_dino_highscore');
+            if (savedHi) highScore = parseInt(savedHi, 10) || 0;
+        } catch (e) {}
+
+        /**
+         * ============================================================================
+         * 4. INITIALISATIE VAN OMGEVING (Wolken, Sterren, Woestijnvloer)
+         * ============================================================================
+         */
+        function initEnvironment() {
+            clouds = [
+                { x: 180, y: 45, speedOffset: 0.25 },
+                { x: 440, y: 28, speedOffset: 0.18 },
+                { x: 650, y: 65, speedOffset: 0.22 }
+            ];
+
+            stars = [];
+            for (let i = 0; i < 12; i++) {
+                stars.push({
+                    x: Math.random() * LOGICAL_WIDTH,
+                    y: 18 + Math.random() * 85,
+                    size: i % 3 === 0 ? 3 : 2,
+                    twinkleOffset: Math.random() * Math.PI * 2
+                });
+            }
+
+            groundBumps = [];
+            for (let x = 0; x < LOGICAL_WIDTH + 100; x += 14) {
+                groundBumps.push({
+                    x: x,
+                    w: Math.random() > 0.5 ? 4 : 2,
+                    yOffset: Math.random() > 0.35 ? 4 : 7,
+                    isBump: Math.random() > 0.88
+                });
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 5. OBSTAKEL GENERATOR (Cactussen & Pterodactylussen)
+         * ============================================================================
+         */
+        function spawnObstacle() {
+            const currentScore = Math.floor(score);
+            // Pterodactylussen verschijnen zodra de score boven de 250 is
+            const canSpawnPtero = currentScore >= 250 && Math.random() < 0.28;
+
+            if (canSpawnPtero) {
+                // 3 Hoogtes: Laag (overheen springen), Midden (bukken of hoog springen), Hoog (onderdoor rennen/bukken)
+                const heights = [
+                    GROUND_Y - 17 * PIXEL_SCALE, // Laag
+                    GROUND_Y - 28 * PIXEL_SCALE, // Midden (precies op hoofdhoogte van staande T-Rex!)
+                    GROUND_Y - 40 * PIXEL_SCALE  // Hoog
+                ];
+                const chosenY = heights[Math.floor(Math.random() * heights.length)];
+
+                obstacles.push({
+                    type: 'PTERO',
+                    x: LOGICAL_WIDTH + 30,
+                    y: chosenY,
+                    width: 21 * PIXEL_SCALE,
+                    height: 15 * PIXEL_SCALE,
+                    frame: 0,
+                    animTimer: 0,
+                    speedExtra: Math.random() > 0.5 ? 0.8 : -0.4
+                });
+            } else {
+                // Kies tussen kleine of grote cactussen, en hoeveel naast elkaar (1, 2 of 3)
+                const isLarge = currentScore > 80 && Math.random() < 0.52;
+                let count = 1;
+                const roll = Math.random();
+                if (currentScore > 30 && roll > 0.50) count = 2;
+                if (currentScore > 180 && roll > 0.80) count = 3;
+
+                const singleW = (isLarge ? 12 : 9) * PIXEL_SCALE;
+                const singleH = (isLarge ? 24 : 18) * PIXEL_SCALE;
+                const gap = 2;
+
+                obstacles.push({
+                    type: isLarge ? 'CACTUS_LARGE' : 'CACTUS_SMALL',
+                    count: count,
+                    singleW: singleW,
+                    gap: gap,
+                    x: LOGICAL_WIDTH + 30,
+                    y: GROUND_Y - singleH,
+                    width: singleW * count + gap * (count - 1),
+                    height: singleH,
+                    speedExtra: 0
+                });
+            }
+
+            // Bereken veilige + uitdagende afstand tot het volgende obstakel
+            const minGap = 210 + gameSpeed * 16;
+            const maxGap = 420 + gameSpeed * 22;
+            nextObstacleDist = minGap + Math.random() * (maxGap - minGap);
+        }
+
+        /**
+         * ============================================================================
+         * 6. BOTSINGSDETECTIE (Nauwkeurige Hitboxes)
+         * ============================================================================
+         */
+        function checkCollision(dinoObj, obs) {
+            // Verklein de hitbox aan de randen met een paar pixels zodat lege hoeken niet tellen
+            const dinoBox = {
+                x: dinoObj.x + 8,
+                y: dinoObj.y + 6,
+                w: dinoObj.width - 16,
+                h: dinoObj.height - 10
+            };
+
+            const obsBox = {
+                x: obs.x + 5,
+                y: obs.y + 5,
+                w: obs.width - 10,
+                h: obs.height - 8
+            };
+
+            return (
+                dinoBox.x < obsBox.x + obsBox.w &&
+                dinoBox.x + dinoBox.w > obsBox.x &&
+                dinoBox.y < obsBox.y + obsBox.h &&
+                dinoBox.y + dinoBox.h > obsBox.y
+            );
+        }
+
+        /**
+         * ============================================================================
+         * 7. SPELBESTURING (Springen, Bukken, Herstarten)
+         * ============================================================================
+         */
+        const keysPressed = {
+            jump: false,
+            duck: false
+        };
+
+        function triggerJump() {
+            if (gameState === 'IDLE') {
+                startGame();
+                performJump();
+                return;
+            }
+
+            if (gameState === 'GAMEOVER') {
+                restartGame();
+                return;
+            }
+
+            if (gameState === 'PLAYING' && !dino.isJumping) {
+                performJump();
+            }
+        }
+
+        function performJump() {
+            dino.isJumping = true;
+            dino.isDucking = false;
+            dino.width = 20 * PIXEL_SCALE;
+            dino.height = 20 * PIXEL_SCALE;
+            dino.vy = -12.6; // Krachtige beginsprong
+            sound.playJump();
+        }
+
+        function setDuck(active) {
+            keysPressed.duck = active;
+            if (gameState !== 'PLAYING') return;
+
+            if (dino.isJumping) {
+                // In de lucht zorgt bukken voor een snelle duikvlucht omlaag (Fast-drop)
+                dino.fastDrop = active;
+            } else {
+                dino.isDucking = active;
+                dino.width = (active ? 26 : 20) * PIXEL_SCALE;
+                dino.height = (active ? 12 : 20) * PIXEL_SCALE;
+                dino.y = GROUND_Y - dino.height;
+            }
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            score = 0;
+            gameSpeed = INITIAL_SPEED;
+            obstacles = [];
+            lastMilestoneReached = 0;
+            milestoneFlashTimer = 0;
+            startPrompt.style.opacity = '0';
+        }
+
+        function restartGame() {
+            dino.reset();
+            obstacles = [];
+            score = 0;
+            gameSpeed = INITIAL_SPEED;
+            lastMilestoneReached = 0;
+            milestoneFlashTimer = 0;
+            nextObstacleDist = 260;
+
+            if (!manualNightOverride) {
+                setNightMode(false);
+            }
+
+            gameState = 'PLAYING';
+            startPrompt.style.opacity = '0';
+            sound.playJump();
+        }
+
+        function setNightMode(night) {
+            isNightMode = night;
+            if (night) {
+                document.body.classList.add('night-mode');
+            } else {
+                document.body.classList.remove('night-mode');
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 8. UPDATE LOOP (Delta-Time Fysica op 60 FPS basis)
+         * ============================================================================
+         */
+        function update(dt) {
+            // dt = 1.0 bij exact 60fps
+            const step = Math.min(dt, 2.5);
+
+            // Vloeiende overgang voor sterren/maan
+            if (isNightMode && nightAlpha < 1) {
+                nightAlpha = Math.min(1, nightAlpha + 0.03 * step);
+            } else if (!isNightMode && nightAlpha > 0) {
+                nightAlpha = Math.max(0, nightAlpha - 0.03 * step);
+            }
+
+            if (gameState === 'IDLE') {
+                // Oogknipper-animatie tijdens het wachten
+                dino.blinkTimer += step;
+                if (dino.blinkTimer > 160) {
+                    dino.isBlinking = true;
+                    if (dino.blinkTimer > 172) {
+                        dino.isBlinking = false;
+                        dino.blinkTimer = 0;
+                    }
+                }
+                return;
+            }
+
+            if (gameState !== 'PLAYING') return;
+
+            // 1. Verhoog snelheid & score
+            if (gameSpeed < MAX_SPEED) {
+                gameSpeed += SPEED_ACCELERATION * step;
+            }
+            score += (gameSpeed * 0.026) * step;
+            const currentIntScore = Math.floor(score);
+
+            // Update snelheidsindicator in de Chrome UI
+            const speedMultiplier = (gameSpeed / INITIAL_SPEED).toFixed(1);
+            speedIndicator.textContent = `SNELHEID: ${speedMultiplier}x`;
+
+            // 2. Check elke 100 punten voor milestone geluid & knipper-effect
+            const milestoneCheck = Math.floor(currentIntScore / 100) * 100;
+            if (milestoneCheck > 0 && milestoneCheck > lastMilestoneReached) {
+                lastMilestoneReached = milestoneCheck;
+                milestoneSavedValue = milestoneCheck;
+                milestoneFlashTimer = 72; // Knippert 4 keer (~1.2 sec)
+                sound.playMilestone();
+            }
+
+            if (milestoneFlashTimer > 0) {
+                milestoneFlashTimer -= step;
+            }
+
+            // 3. Automatische Dag/Nacht-cyclus elke 700 punten (duurt 200 punten)
+            if (!manualNightOverride) {
+                const cyclePos = currentIntScore % 900;
+                const shouldBeNight = currentIntScore >= 700 && cyclePos >= 700;
+                if (shouldBeNight !== isNightMode) {
+                    setNightMode(shouldBeNight);
+                }
+            }
+
+            // 4. T-Rex Fysica (Springen, Variabele spronghoogte & Zwaartekracht)
+            if (dino.isJumping) {
+                let gravity = 0.62;
+                // Als de speler de springknop vroeg loslaat terwijl de dino nog omhoog gaat, rem sneller af
+                if (!keysPressed.jump && dino.vy < -4) {
+                    gravity = 1.35;
+                }
+                // Als de speler omlaag drukt in de lucht (fast-drop)
+                if (dino.fastDrop) {
+                    gravity = 2.4;
+                }
+
+                dino.vy += gravity * step;
+                dino.y += dino.vy * step;
+
+                // Landen op de grond
+                const targetGroundY = GROUND_Y - (keysPressed.duck ? 12 * PIXEL_SCALE : 20 * PIXEL_SCALE);
+                if (dino.y >= targetGroundY) {
+                    dino.isJumping = false;
+                    dino.fastDrop = false;
+                    dino.vy = 0;
+                    dino.isDucking = keysPressed.duck;
+                    dino.width = (dino.isDucking ? 26 : 20) * PIXEL_SCALE;
+                    dino.height = (dino.isDucking ? 12 : 20) * PIXEL_SCALE;
+                    dino.y = GROUND_Y - dino.height;
+                }
+            } else {
+                // Op de grond: pas houding direct aan op buk-knop
+                if (dino.isDucking !== keysPressed.duck) {
+                    dino.isDucking = keysPressed.duck;
+                    dino.width = (dino.isDucking ? 26 : 20) * PIXEL_SCALE;
+                    dino.height = (dino.isDucking ? 12 : 20) * PIXEL_SCALE;
+                    dino.y = GROUND_Y - dino.height;
+                }
+            }
+
+            // Loop-animatie van de T-Rex pootjes
+            dino.animTimer += step * (gameSpeed / INITIAL_SPEED);
+            if (dino.animTimer >= 5) {
+                dino.legFrame = 1 - dino.legFrame;
+                dino.animTimer = 0;
+            }
+
+            // 5. Wolken verplaatsen
+            clouds.forEach(cloud => {
+                cloud.x -= (gameSpeed * cloud.speedOffset) * step;
+                if (cloud.x < -70) {
+                    cloud.x = LOGICAL_WIDTH + 30 + Math.random() * 80;
+                    cloud.y = 22 + Math.random() * 55;
+                }
+            });
+
+            // 6. Woestijnvloer scrollen
+            groundOffset = (groundOffset + gameSpeed * step) % LOGICAL_WIDTH;
+            groundBumps.forEach(bump => {
+                bump.x -= gameSpeed * step;
+                if (bump.x < -20) {
+                    bump.x += LOGICAL_WIDTH + 60;
+                    bump.w = Math.random() > 0.5 ? 4 : 2;
+                    bump.yOffset = Math.random() > 0.35 ? 4 : 7;
+                }
+            });
+
+            // 7. Obstakels spawnen, verplaatsen & botsingen controleren
+            nextObstacleDist -= gameSpeed * step;
+            if (nextObstacleDist <= 0) {
+                spawnObstacle();
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                const moveSpeed = gameSpeed + (obs.speedExtra || 0);
+                obs.x -= moveSpeed * step;
+
+                // Vleugel-animatie voor Pterodactylus
+                if (obs.type === 'PTERO') {
+                    obs.animTimer += step;
+                    if (obs.animTimer >= 9) {
+                        obs.frame = 1 - obs.frame;
+                        obs.animTimer = 0;
+                    }
+                }
+
+                // Botsing met speler?
+                if (checkCollision(dino, obs)) {
+                    handleGameOver();
+                    break;
+                }
+
+                // Verwijder obstakels die links uit beeld zijn
+                if (obs.x + obs.width < -40) {
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+
+        function handleGameOver() {
+            gameState = 'GAMEOVER';
+            sound.playGameOver();
+
+            const finalScore = Math.floor(score);
+            if (finalScore > highScore) {
+                highScore = finalScore;
+                try {
+                    localStorage.setItem('chrome_dino_highscore', String(highScore));
+                } catch (e) {}
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 9. RENDER LOOP (Tekent het hele spel op het Canvas)
+         * ============================================================================
+         */
+        function draw() {
+            // Pas canvas resolutie scherp aan op de container
+            if (canvas.width !== LOGICAL_WIDTH || canvas.height !== LOGICAL_HEIGHT) {
+                canvas.width = LOGICAL_WIDTH;
+                canvas.height = LOGICAL_HEIGHT;
+            }
+
+            ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+            // Kleurenpalet afhankelijk van Dag of Nacht
+            const fgColor = isNightMode ? '#e8eaed' : '#535353';
+            const mutedColor = isNightMode ? '#5f6368' : '#bcbcbc';
+
+            // 1. Nachthemel: Sterren & Halve Maan
+            if (nightAlpha > 0.02) {
+                ctx.save();
+                ctx.globalAlpha = nightAlpha * 0.75;
+                ctx.fillStyle = fgColor;
+
+                // Teken sterren
+                stars.forEach(s => {
+                    ctx.fillRect(Math.round(s.x), Math.round(s.y), s.size, s.size);
+                });
+
+                // Teken pixel halve maan rechtsboven
+                const moonX = LOGICAL_WIDTH - 135;
+                const moonY = 38;
+                ctx.beginPath();
+                ctx.arc(moonX, moonY, 11, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = isNightMode ? '#292a2d' : '#ffffff';
+                ctx.beginPath();
+                ctx.arc(moonX - 5, moonY - 2, 9, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 2. Wolken
+            clouds.forEach(cloud => {
+                drawMatrix(ctx, SPRITES.CLOUD, cloud.x, cloud.y, PIXEL_SCALE, mutedColor);
+            });
+
+            // 3. Woestijn Horizonlijn & Steentjes
+            ctx.fillStyle = fgColor;
+            ctx.fillRect(0, GROUND_Y, LOGICAL_WIDTH, 2);
+
+            groundBumps.forEach(bump => {
+                if (bump.isBump) {
+                    // Kleine hobbel in de zandlijn
+                    ctx.fillRect(Math.round(bump.x), GROUND_Y - 2, 6, 2);
+                } else {
+                    // Kleine zandkorrels onder de lijn
+                    ctx.fillRect(Math.round(bump.x), GROUND_Y + bump.yOffset, bump.w, 2);
+                }
+            });
+
+            // 4. Obstakels (Cactussen & Pterodactylussen)
+            obstacles.forEach(obs => {
+                if (obs.type === 'PTERO') {
+                    const pteroSprite = obs.frame === 0 ? SPRITES.PTERO_1 : SPRITES.PTERO_2;
+                    drawMatrix(ctx, pteroSprite, obs.x, obs.y, PIXEL_SCALE, fgColor);
+                } else {
+                    const cactusSprite = obs.type === 'CACTUS_LARGE' ? SPRITES.CACTUS_LARGE : SPRITES.CACTUS_SMALL;
+                    for (let c = 0; c < obs.count; c++) {
+                        const offsetX = obs.x + c * (obs.singleW + obs.gap);
+                        drawMatrix(ctx, cactusSprite, offsetX, obs.y, PIXEL_SCALE, fgColor);
+                    }
+                }
+            });
+
+            // 5. De T-Rex Speler
+            let dinoMatrix = DINO_FRAMES.idle;
+            if (gameState === 'GAMEOVER') {
+                dinoMatrix = DINO_FRAMES.crash;
+                // Zorg dat een bukkende dino bij een botsing op de juiste hoogte getekend wordt
+                const crashY = Math.min(dino.y, GROUND_Y - 20 * PIXEL_SCALE);
+                drawMatrix(ctx, dinoMatrix, dino.x, crashY, PIXEL_SCALE, fgColor);
+            } else if (gameState === 'IDLE') {
+                dinoMatrix = dino.isBlinking ? DINO_FRAMES.blink : DINO_FRAMES.idle;
+                drawMatrix(ctx, dinoMatrix, dino.x, dino.y, PIXEL_SCALE, fgColor);
+            } else {
+                if (dino.isJumping) {
+                    dinoMatrix = DINO_FRAMES.idle;
+                } else if (dino.isDucking) {
+                    dinoMatrix = dino.legFrame === 0 ? DINO_FRAMES.duck1 : DINO_FRAMES.duck2;
+                } else {
+                    dinoMatrix = dino.legFrame === 0 ? DINO_FRAMES.run1 : DINO_FRAMES.run2;
+                }
+                drawMatrix(ctx, dinoMatrix, dino.x, dino.y, PIXEL_SCALE, fgColor);
+            }
+
+            // 6. Scorebord rechtsboven ('HI 00000  00000')
+            ctx.font = '12px "Press Start 2P", monospace';
+            ctx.textAlign = 'right';
+
+            // High Score
+            if (highScore > 0) {
+                const hiFormatted = String(highScore).padStart(5, '0');
+                ctx.fillStyle = mutedColor;
+                ctx.fillText(`HI ${hiFormatted}`, LOGICAL_WIDTH - 92, 26);
+            }
+
+            // Huidige Score (knippert bij elke 100 punten)
+            const isFlashVisible = milestoneFlashTimer <= 0 || Math.floor(milestoneFlashTimer / 9) % 2 === 0;
+            if (isFlashVisible) {
+                const displayVal = milestoneFlashTimer > 0 ? milestoneSavedValue : Math.floor(score);
+                const scoreFormatted = String(Math.min(99999, displayVal)).padStart(5, '0');
+                ctx.fillStyle = fgColor;
+                ctx.fillText(scoreFormatted, LOGICAL_WIDTH - 16, 26);
+            }
+
+            // 7. GAME OVER Overlay & Herstart Knop op het canvas
+            if (gameState === 'GAMEOVER') {
+                ctx.fillStyle = fgColor;
+                ctx.font = '14px "Press Start 2P", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('G A M E   O V E R', LOGICAL_WIDTH / 2, 72);
+
+                // Teken het klassieke herstart-knopje in het midden
+                const btnW = 36;
+                const btnH = 32;
+                const btnX = LOGICAL_WIDTH / 2 - btnW / 2;
+                const btnY = 92;
+
+                ctx.fillStyle = fgColor;
+                ctx.fillRect(btnX, btnY, btnW, btnH);
+
+                const iconScale = 2;
+                const iconX = btnX + (btnW - 14 * iconScale) / 2;
+                const iconY = btnY + (btnH - 13 * iconScale) / 2;
+                const iconColor = isNightMode ? '#202124' : '#ffffff';
+                drawMatrix(ctx, SPRITES.RESTART, iconX, iconY, iconScale, iconColor);
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 10. HOOFD ANIMATIE LOOP & EVENT LISTENERS
+         * ============================================================================
+         */
+        let lastTimestamp = 0;
+
+        function gameLoop(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const elapsedMs = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+
+            // Normaliseer naar 60fps eenheden (16.67ms = 1.0)
+            const dt = elapsedMs / 16.667;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Toetsenbord Besturing
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                e.preventDefault();
+                keysPressed.jump = true;
+                triggerJump();
+            } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                e.preventDefault();
+                setDuck(true);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                keysPressed.jump = false;
+            } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                setDuck(false);
+            }
+        });
+
+        // Klik of Tik op het Canvas
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            keysPressed.jump = true;
+            triggerJump();
+        });
+
+        canvas.addEventListener('pointerup', () => {
+            keysPressed.jump = false;
+        });
+
+        // Mobiele Knoppen Onder het Spel
+        const touchJumpBtn = document.getElementById('touch-jump-btn');
+        const touchDuckBtn = document.getElementById('touch-duck-btn');
+
+        touchJumpBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            keysPressed.jump = true;
+            triggerJump();
+        });
+        touchJumpBtn.addEventListener('pointerup', () => {
+            keysPressed.jump = false;
+        });
+
+        touchDuckBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            setDuck(true);
+        });
+        touchDuckBtn.addEventListener('pointerup', () => {
+            setDuck(false);
+        });
+        touchDuckBtn.addEventListener('pointerleave', () => {
+            setDuck(false);
+        });
+
+        // UI Knoppen in de Header
+        const soundToggleBtn = document.getElementById('sound-toggle-btn');
+        const soundIcon = document.getElementById('sound-icon');
+        const soundLabel = document.getElementById('sound-label');
+
+        soundToggleBtn.addEventListener('click', () => {
+            sound.enabled = !sound.enabled;
+            soundIcon.textContent = sound.enabled ? '🔊' : '🔇';
+            soundLabel.textContent = sound.enabled ? 'Geluid: Aan' : 'Geluid: Uit';
+            if (sound.enabled) sound.playJump();
+            soundToggleBtn.blur();
+        });
+
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const themeIcon = document.getElementById('theme-icon');
+
+        themeToggleBtn.addEventListener('click', () => {
+            manualNightOverride = true;
+            setNightMode(!isNightMode);
+            themeIcon.textContent = isNightMode ? '☀️' : '🌙';
+            themeToggleBtn.blur();
+        });
+
+        const restartTopBtn = document.getElementById('restart-top-btn');
+        restartTopBtn.addEventListener('click', () => {
+            restartGame();
+            restartTopBtn.blur();
+        });
+
+        // Start de game zodra het venster geladen is
+        window.onload = () => {
+            initEnvironment();
+            dino.reset();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
